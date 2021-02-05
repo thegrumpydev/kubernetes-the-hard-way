@@ -1,0 +1,6 @@
+---
+- hosts: controller-0
+  tasks: 
+  - name: Deploy CoreDNS
+    shell: |
+      kubectl apply -f https://storage.googleapis.com/kubernetes-the-hard-way/coredns-1.7.0.yaml

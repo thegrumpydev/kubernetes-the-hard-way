@@ -1,0 +1,122 @@
+---
+  - hosts: localhost
+    tasks:
+    - name: Include host variables
+      include_vars:
+        file: ../variables/variables.yml
+
+    - name: Create CA 
+      shell: |
+        cfssl gencert -initca {{ certs_dir }}/ca-csr.json | cfssljson -bare {{ data_dir }}/ca
+
+    - name: Create Admin Cert
+      shell: |
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -profile=kubernetes \
+          {{ certs_dir }}/admin-csr.json | cfssljson -bare {{ data_dir }}/admin
+
+    - name: Create Worker CSRs
+      template:
+          src: ../template/worker-certs.tpl
+          dest: "{{ data_dir }}/{{ item.name }}-csr.json"
+      loop: "{{ workers }}"
+
+    - name: Create Worker Certs
+      shell: |
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -hostname={{ item.name }},{{ item.public_ip }},{{ item.private_ip }} \
+          -profile=kubernetes \
+          {{ data_dir }}/{{ item.name }}-csr.json | cfssljson -bare {{ data_dir }}/{{ item.name }}
+      loop: "{{ workers }}"
+
+
+    - name: Create Controller Certs
+      shell: |
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -profile=kubernetes \
+          {{ certs_dir }}/kube-controller-manager-csr.json | cfssljson -bare {{ data_dir }}/kube-controller-manager
+
+
+    - name: Create Kube-Proxy Cert
+      shell: |
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -profile=kubernetes \
+          {{ certs_dir }}/kube-proxy-csr.json | cfssljson -bare {{ data_dir }}/kube-proxy
+
+    - name: Create Scheduler Cert
+      shell: |
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -profile=kubernetes \
+          {{ certs_dir }}/kube-scheduler-csr.json | cfssljson -bare {{ data_dir }}/kube-scheduler
+    
+    - name: Create API Server Cert
+      shell: |
+        {
+        KUBERNETES_HOSTNAMES=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -hostname=10.32.0.1,10.240.0.10,10.240.0.11,10.240.0.12,{{ public_ip }},127.0.0.1,${KUBERNETES_HOSTNAMES} \
+          -profile=kubernetes \
+          {{ certs_dir }}/kubernetes-csr.json | cfssljson -bare {{ data_dir }}/kubernetes
+        }
+
+    - name: Create Service Account Cert
+      shell: |
+        cfssl gencert \
+          -ca={{ data_dir }}/ca.pem \
+          -ca-key={{ data_dir }}/ca-key.pem \
+          -config={{ certs_dir }}/ca-config.json \
+          -profile=kubernetes \
+          {{ certs_dir }}/service-account-csr.json | cfssljson -bare {{ data_dir }}/service-account
+
+  - hosts: workers
+    become: yes
+    tasks:
+    - name: Include host variables
+      include_vars:
+        file: ../variables/variables.yml
+
+    - name: Distribute worker cert
+      copy:
+        src: "{{ data_dir }}/{{ item }}"
+        dest: "~/"
+      loop: 
+        - ca.pem 
+        - "{{ inventory_hostname }}-key.pem" 
+        - "{{ inventory_hostname }}.pem"
+
+  - hosts: controllers
+    become: yes
+    tasks:
+    - name: Include host variables
+      include_vars:
+        file: ../variables/variables.yml
+        
+    - name: Distribute controller cert
+      copy:
+        src: "{{ data_dir }}/{{ item }}"
+        dest: "~/"
+      loop: 
+        - ca.pem 
+        - ca-key.pem
+        - kubernetes-key.pem
+        - kubernetes.pem
+        - service-account-key.pem 
+        - service-account.pem

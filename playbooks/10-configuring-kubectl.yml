@@ -1,0 +1,29 @@
+---
+  - hosts: localhost
+    tasks:
+    - name: Include host variables
+      include_vars:
+        file: ../variables/variables.yml
+    
+    - name: Set Cluster
+      shell: |
+        kubectl config set-cluster kubernetes-the-hard-way \
+          --certificate-authority={{ data_dir }}/ca.pem \
+          --embed-certs=true \
+          --server=https://{{ public_ip }}:6443
+    
+    - name: Set Credentials
+      shell: |
+        kubectl config set-credentials admin \
+          --client-certificate={{ data_dir }}/admin.pem \
+          --client-key={{ data_dir }}/admin-key.pem
+
+    - name: Set Context
+      shell: |
+        kubectl config set-context kubernetes-the-hard-way \
+          --cluster=kubernetes-the-hard-way \
+          --user=admin
+
+    - name: Use Context
+      shell: |
+        kubectl config use-context kubernetes-the-hard-way

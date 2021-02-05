@@ -1,0 +1,33 @@
+---
+# - name: Compute Resources
+#   import_playbook: playbooks/03-compute-resources.yml
+
+- name: Certificate Authority
+  import_playbook: playbooks/04-certificate-authority.yml
+
+- name: Kubernetes Configuration Files
+  import_playbook: playbooks/05-kubernetes-configuration-files.yml
+
+- name: Data Encryption
+  import_playbook: playbooks/06-data-encryption-keys.yml
+
+- name: Bootstrapping ETCD
+  import_playbook: playbooks/07-bootstrapping-etcd.yml
+
+- name: Bootstrapping Kubernetes Controllers
+  import_playbook: playbooks/08-bootstrapping-kubernetes-controllers.yml
+
+- name: Bootstrapping Kubernetes Workers
+  import_playbook: playbooks/09-bootstrapping-kubernetes-workers.yml
+
+- name: Configuring Kubectl
+  import_playbook: playbooks/10-configuring-kubectl.yml
+
+# - name: Pod Network Routes
+#   import_playbook: playbooks/11-pod-network-routes.yml
+
+- name: DNS Addon
+  import_playbook: playbooks/12-dns-addon.yml
+
+# - name: Smoke Test
+#   import_playbook: playbooks/13-smoke-test.yml

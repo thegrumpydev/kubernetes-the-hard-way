@@ -1,0 +1,84 @@
+---
+  - hosts: controllers
+    become: yes
+    vars:
+      ansible_ssh_private_key_file: "/home/ajwarren/.ssh/google_compute_engine"
+      etcd_version: v3.4.10
+    tasks:
+    - name: Include host variables
+      include_vars:
+        file: ../variables/variables.yml
+
+    - name: Download ETCD binaries
+      unarchive:
+        src: "https://github.com/etcd-io/etcd/releases/download/{{ etcd_version }}/etcd-{{ etcd_version }}-linux-amd64.tar.gz"
+        remote_src: yes
+        dest: "/tmp"
+
+    - name: Move ETCD to bin
+      copy:
+        src: "/tmp/etcd-{{ etcd_version }}-linux-amd64/{{ item }}" 
+        remote_src: yes
+        dest: "/usr/local/bin/"
+        mode: '0755'
+      loop: 
+        - "etcd"
+        - "etcdctl"
+
+    - name: Create /var/lib/etcd
+      file:
+        path: /var/lib/etcd
+        state: directory
+        mode: '0700'
+    
+    - name: Copy SSL Certs
+      copy:
+        src: "{{ data_dir }}/{{ item }}"
+        dest: /etc/etcd/
+        mode: '0640'
+      loop:
+        - ca.pem
+        - kubernetes-key.pem
+        - kubernetes.pem
+
+    - name: Create Service unit file
+      copy:
+        dest: /etc/systemd/system/etcd.service
+        mode: '0755'
+        content: |
+          [Unit]
+          Description=etcd
+          Documentation=https://github.com/coreos
+
+          [Service]
+          Type=notify
+          ExecStart=/usr/local/bin/etcd \
+            --name {{ inventory_hostname }} \
+            --cert-file=/etc/etcd/kubernetes.pem \
+            --key-file=/etc/etcd/kubernetes-key.pem \
+            --peer-cert-file=/etc/etcd/kubernetes.pem \
+            --peer-key-file=/etc/etcd/kubernetes-key.pem \
+            --trusted-ca-file=/etc/etcd/ca.pem \
+            --peer-trusted-ca-file=/etc/etcd/ca.pem \
+            --peer-client-cert-auth \
+            --client-cert-auth \
+            --initial-advertise-peer-urls https://{{ hostvars[inventory_hostname]['private_ip'] }}:2380 \
+            --listen-peer-urls https://{{ hostvars[inventory_hostname]['private_ip'] }}:2380 \
+            --listen-client-urls https://{{ hostvars[inventory_hostname]['private_ip'] }}:2379,https://127.0.0.1:2379 \
+            --advertise-client-urls https://{{ hostvars[inventory_hostname]['private_ip'] }}:2379 \
+            --initial-cluster-token etcd-cluster-0 \
+            --initial-cluster controller-0=https://10.240.0.10:2380,controller-1=https://10.240.0.11:2380,controller-2=https://10.240.0.12:2380 \
+            --initial-cluster-state new \
+            --data-dir=/var/lib/etcd
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start ETCD Service
+      systemd:
+        state: started
+        daemon_reload: yes
+        name: etcd
+        enabled: yes

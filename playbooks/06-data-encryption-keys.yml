@@ -1,0 +1,34 @@
+---
+  - hosts: localhost
+    tasks:
+    - name: Create Encryption Key
+      shell: "head -c 32 /dev/urandom | base64"
+      register: e_key
+
+    - name: Create Encryption Config
+      shell: |
+        cat > {{ data_dir }}/encryption-config.yaml <<EOF
+        kind: EncryptionConfig
+        apiVersion: v1
+        resources:
+          - resources:
+              - secrets
+            providers:
+              - aescbc:
+                  keys:
+                    - name: key1
+                      secret: {{ e_key.stdout }}
+              - identity: {}
+        EOF
+  
+  - hosts: controllers
+    become: yes
+    tasks:
+    - name: Include host variables
+      include_vars:
+        file: ../variables/variables.yml
+        
+    - name: Distribute Config to Controllers
+      copy:
+        src: "{{ data_dir }}/encryption-config.yaml"
+        dest: "~/"
